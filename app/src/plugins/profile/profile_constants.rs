@@ -1,0 +1,1 @@
+pub const PROFILE_PATH: &'static str = "./data/profile.json";
