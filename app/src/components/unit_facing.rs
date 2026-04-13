@@ -1,7 +1,7 @@
 use bevy::ecs::component::Component;
+use bevy::prelude::{Deref, DerefMut};
 
-#[derive(Component, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum UnitFacing {
-  Left,
-  Right,
-}
+use crate::models::facing_code::FacingCode;
+
+#[derive(Component, Deref, DerefMut)]
+pub struct UnitFacing(pub FacingCode);

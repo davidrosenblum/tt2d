@@ -7,6 +7,7 @@ pub mod asset_toon_sprite_code;
 pub mod asset_ui_animation_code;
 pub mod asset_ui_sprite_code;
 pub mod cog_department_code;
+pub mod facing_code;
 pub mod map_code;
 pub mod profile_data;
 pub mod sprite_animation_frame_data;

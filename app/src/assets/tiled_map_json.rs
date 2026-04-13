@@ -65,12 +65,23 @@ pub struct TiledMapJsonObjectProperty {
 
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum TiledMapJsonObjectPropertyName {
-  #[serde(rename = "department")]
+  // COgSpawner
+  #[serde(rename = "cog_department")]
   CogSpawnerDepartment,
-  #[serde(rename = "tier")]
+  #[serde(rename = "cog_facing")]
+  CogSpawnerFacing,
+  #[serde(rename = "cog_tier")]
   CogSpawnerTier,
+
+  // ToonCompanionSpawner
   #[serde(rename = "companion")]
   ToonCompanionSpawnerCompanion,
+  #[serde(rename = "companion_facing")]
+  ToonCompanionSpawnerCompanionFacing,
+
+  // ToonNpcSpawner
   #[serde(rename = "npc")]
   ToonNpcSpawnerNpc,
+  #[serde(rename = "npc_facing")]
+  ToonNpcSpawnerFacing,
 }
