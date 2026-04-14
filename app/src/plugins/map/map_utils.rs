@@ -21,10 +21,10 @@ const HALF_TILE_SIZE: f32 = TILE_SIZE / 2.;
 /** Figure out the area of the map in pixels. */
 pub fn get_map_bounds(tilemap_json: &TiledMapJson) -> Rect {
   Rect::new(
-    0.,
-    0.,
-    tilemap_json.width as f32 * TILE_SIZE,
-    tilemap_json.height as f32 * TILE_SIZE - TILE_SIZE,
+    0., // Left
+    0., // Bottom
+    tilemap_json.width as f32 * TILE_SIZE, // Right
+    tilemap_json.height as f32 * TILE_SIZE, // Top
   )
 }
 
