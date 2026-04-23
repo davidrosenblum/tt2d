@@ -3,7 +3,7 @@ use bevy::ecs::entity::Entity;
 use bevy::ecs::message::MessageReader;
 use bevy::ecs::query::{Changed, With};
 use bevy::ecs::system::{Commands, If, Query, Res};
-use bevy::log::warn;
+use bevy::log::{info, warn};
 use bevy::math::Vec2;
 use bevy::sprite::Sprite;
 use bevy::time::Time;
@@ -146,6 +146,9 @@ fn poll_map_loaded(
         &cog_sprite_store,
       ) {
         commands.spawn(cog_bundle);
+        info!("Spawned cog: {:?}:{:?}", cog_department_code, tier);
+      } else {
+        warn!("CogSpawner cog data missing: {:?}:{:?}", cog_department_code, tier);
       }
     }
   }
