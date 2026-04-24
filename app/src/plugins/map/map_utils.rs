@@ -13,7 +13,7 @@ use crate::assets::tiled_map_json::{TiledMapJson, TiledMapJsonLayer, TiledMapJso
 use crate::components::structure_tile::StructureTile;
 use crate::constants::{STRUCTURE_TOP_Z_INDEX, TERRAIN_Z_INDEX, TILE_SIZE};
 use crate::errors::tilemap_spawn_error::TilemapSpawnError;
-use crate::plugins::map::map_constants::{TILEMAP_LAYER_INDEX_STRUCTURES_BASE, TILEMAP_LAYER_INDEX_STRUCTURES_TOP, TILEMAP_LAYER_INDEX_TERRAIN};
+use crate::plugins::map::map_constants::{TILEMAP_LAYER_INDEX_STRUCTURES_BASE, TILEMAP_LAYER_INDEX_STRUCTURES_TOP, TILEMAP_LAYER_INDEX_TERRAIN, TILEMAP_LAYER_INDEX_TERRAIN_TRANSITION};
 use crate::utils::get_z_from_y::get_z_from_y;
 
 const HALF_TILE_SIZE: f32 = TILE_SIZE / 2.;
@@ -178,6 +178,22 @@ pub fn spawn_map(
   } else {
     warn!("Map file does not define a valid Terrain layer");
     return Err(TilemapSpawnError::MissingInvalidTerrainLayer);
+  }
+
+  // Terrain transition
+  if let Some(TiledMapJsonLayer::Tile(terrain_transition_layer)) = tilemap_json.layers.get(TILEMAP_LAYER_INDEX_TERRAIN_TRANSITION) {
+    spawn_tilemap_layer(
+      commands,
+      terrain_transition_layer,
+      tileset_terrain_image_handle.clone(),
+      tilemap_json.tilewidth,
+      tilemap_json.tileheight,
+      first_guid_terrain,
+      TERRAIN_Z_INDEX,
+    );
+  } else {
+    warn!("Map file does not define a valid TerrainTransition layer");
+    return Err(TilemapSpawnError::MissingInvalidTerrainTransitionLayer);
   }
 
   // Structures bottom

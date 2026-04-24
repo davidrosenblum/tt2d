@@ -4,6 +4,8 @@ pub enum TilemapSpawnError {
   TilesetsLength,
   /** Map file is missing or has invalid terrain layer. */
   MissingInvalidTerrainLayer,
+  /** Map file is missing or has invalid terrain transition layer. */
+  MissingInvalidTerrainTransitionLayer,
   /** Map file is missing or has invalid structure bottom layer. */
   MissingInvalidStructureBottomLayer,
   /** Map file is missing or has invalid structure top layer. */

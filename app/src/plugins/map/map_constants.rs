@@ -1,8 +1,9 @@
 // Array indexes in the json map file
 pub const TILEMAP_LAYER_INDEX_TERRAIN: usize = 0;
-pub const TILEMAP_LAYER_INDEX_STRUCTURES_BASE: usize = 1;
-pub const TILEMAP_LAYER_INDEX_STRUCTURES_TOP: usize = 2;
-pub const TILEMAP_LAYER_INDEX_OBJECTS: usize = 3;
+pub const TILEMAP_LAYER_INDEX_TERRAIN_TRANSITION: usize = 1;
+pub const TILEMAP_LAYER_INDEX_STRUCTURES_BASE: usize = 2;
+pub const TILEMAP_LAYER_INDEX_STRUCTURES_TOP: usize = 3;
+pub const TILEMAP_LAYER_INDEX_OBJECTS: usize = 4;
 
 // Ttc file paths
 pub const TTC_TILESET_TERRAIN_IMAGE_PATH: &'static str = "tileset_ttc_terrain.png";
