@@ -50,10 +50,14 @@ pub struct TiledMapJsonObject {
 /** 1:1 with Tiled custom classes. */
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum TiledMapJsonObjectType {
+  // Spawners
   CogSpawner,
   PlayerSpawner,
   ToonCompanionSpawner,
   ToonNpcSpawner,
+  // Regions
+  CogRegion,
+  TeleportRegion,
 }
 
 #[derive(Clone, Deserialize)]
@@ -65,7 +69,7 @@ pub struct TiledMapJsonObjectProperty {
 
 #[derive(Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum TiledMapJsonObjectPropertyName {
-  // COgSpawner
+  // CogSpawner
   #[serde(rename = "cog_department")]
   CogSpawnerDepartment,
   #[serde(rename = "cog_facing")]
@@ -84,4 +88,20 @@ pub enum TiledMapJsonObjectPropertyName {
   ToonNpcSpawnerNpc,
   #[serde(rename = "npc_facing")]
   ToonNpcSpawnerFacing,
+
+  // CogRegion
+  #[serde(rename = "cog_region_count")]
+  CogRegionCount,
+  #[serde(rename = "cog_region_department")]
+  CogRegionDepartment,
+  #[serde(rename = "cog_region_difficult")]
+  CogRegionDifficulty,
+  #[serde(rename = "cog_region_tier_min")]
+  CogRegionTierMin,
+  #[serde(rename = "cog_region_tier_max")]
+  CogRegionTierMax,
+
+  // TeleportRegion
+  #[serde(rename = "tp_location")]
+  TeleportRegionLocation,
 }
