@@ -166,6 +166,7 @@ fn check_map_loaded(
   mut commands: Commands,
   mut loaded_map_message_witer: MessageWriter<LoadedMap>,
   tracker: If<Res<MapLoadTracker>>,
+  map_context: Option<Res<MapContext>>,
   tiled_map_json_assets: Res<Assets<TiledMapJson>>,
   asset_server: Res<AssetServer>,
   mut next_state: ResMut<NextState<AppState>>,
@@ -199,13 +200,19 @@ fn check_map_loaded(
     tracker.tileset_structure_image_handle.clone(),
   ).expect("Map file is corrupted");
 
-  // Save the map context
-  let map_context = MapContext {
+  // Delete the old map context
+  if map_context.is_some() {
+    commands.remove_resource::<MapContext>();
+  }
+
+  // Save the new map context
+  let new_map_context = MapContext {
     map_code: tracker.map_code,
     map_data: tracker.map_data,
     bounds: get_map_bounds(tilemap_json),
+    prev_map_hub_code: map_context.and_then(|mc| mc.map_data.map_hub_code),
   };
-  commands.insert_resource(map_context);
+  commands.insert_resource(new_map_context);
 
   // Extract map objects
   let map_objects = match tilemap_json.layers.get(TILEMAP_LAYER_INDEX_OBJECTS) {
