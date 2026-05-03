@@ -44,6 +44,8 @@ pub struct TiledMapJsonObject {
   pub object_type: TiledMapJsonObjectType,
   pub x: u32,
   pub y: u32,
+  pub width: u32,
+  pub height: u32,
   pub properties: Option<Vec<TiledMapJsonObjectProperty>>,
 }
 
@@ -94,7 +96,7 @@ pub enum TiledMapJsonObjectPropertyName {
   CogRegionCount,
   #[serde(rename = "cog_region_department")]
   CogRegionDepartment,
-  #[serde(rename = "cog_region_difficult")]
+  #[serde(rename = "cog_region_difficulty")]
   CogRegionDifficulty,
   #[serde(rename = "cog_region_tier_min")]
   CogRegionTierMin,
