@@ -375,13 +375,15 @@ fn process_teleport_region(
     return;
   };
 
+  let scale_x = TILE_SIZE / tilewidth as f32;
+  let scale_y = TILE_SIZE / tileheight as f32;
   let tiled_position = Vec2::new(map_object.x as f32, map_object.y as f32);
   let position = normalize_tiled_point(&tiled_position, tilewidth, tileheight, map_height);
   let bounds = Rect::new(
     position.x,
     position.y,
-    position.x + map_object.width as f32,
-    position.y + map_object.height as f32,
+    position.x + map_object.width as f32 * scale_x,
+    position.y - map_object.height as f32 * scale_y,
   );
 
   let teleport_region = TeleportRegion {
