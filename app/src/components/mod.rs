@@ -6,6 +6,7 @@ pub mod player_controlled;
 pub mod projectile;
 pub mod sprite_animation_state;
 pub mod structure_tile;
+pub mod teleport_region;
 pub mod toon_animation;
 pub mod toon_bundle;
 pub mod toon_companion_active;
