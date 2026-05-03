@@ -1,7 +1,7 @@
 use bevy::app::{Plugin, Update};
 use bevy::camera::Camera2d;
 use bevy::ecs::entity::Entity;
-use bevy::ecs::message::MessageReader;
+use bevy::ecs::message::{MessageReader, MessageWriter};
 use bevy::ecs::query::{Changed, With, Without};
 use bevy::ecs::system::{Commands, If, Query, Res};
 use bevy::input::ButtonInput;
@@ -15,13 +15,14 @@ use bevy::transform::components::Transform;
 use crate::assets::tiled_map_json::{TiledMapJsonObjectPropertyName, TiledMapJsonObjectType};
 use crate::components::player_controlled::PlayerControlled;
 use crate::components::sprite_animation_state::SpriteAnimationState;
+use crate::components::teleport_region::TeleportRegion;
 use crate::components::toon::Toon;
 use crate::components::toon_animation::ToonAnimation;
 use crate::components::toon_companion_active::ToonCompanionActive;
 use crate::components::toon_sprite::ToonSprite;
 use crate::components::unit_facing::UnitFacing;
 use crate::components::unit_movement::UnitMovement;
-use crate::constants::{TOON_SIZE, VIEWPORT_HEIGHT, VIEWPORT_WIDTH};
+use crate::constants::{TILE_SIZE, TOON_SIZE, VIEWPORT_HEIGHT, VIEWPORT_WIDTH};
 use crate::messages::load_map_requested::LoadMapRequested;
 use crate::messages::loaded_map::{LoadedMap};
 use crate::models::asset_toon_animation_code::AssetToonAnimationCode;
@@ -47,6 +48,7 @@ impl Plugin for ToonPlugin {
       update_toon_facing_direction, 
       update_toon_companion_movement,
       update_toon_animation_frame,
+      check_teleport_region_collision,
     ));
     app.add_systems(Update, (poll_map_load_requested, poll_map_loaded));
   }
@@ -290,6 +292,30 @@ fn update_player_keyboard_movement(
 
   // TODO check collision
   if unit_movement.is_collision_enabled {}
+}
+
+fn check_teleport_region_collision(
+  player_query: Query<&Transform, (With<PlayerControlled>, Changed<Transform>)>,
+  teleport_regions_query: Query<&TeleportRegion>,
+  mut load_map_requested_writer: MessageWriter<LoadMapRequested>,
+) {
+  let Ok(player_transform) = player_query.single() else {
+    return;
+  };
+
+  let player_rect = Rect::new(
+    player_transform.translation.x,
+    player_transform.translation.y,
+    player_transform.translation.x + TILE_SIZE,
+    player_transform.translation.y + TILE_SIZE,
+  );
+  for teleport_region in teleport_regions_query {
+    if !teleport_region.bounds.intersect(player_rect).is_empty() {
+      info!("Player colliding with teleport region for {:?}", teleport_region.map_code);
+      load_map_requested_writer.write(LoadMapRequested { map_code: teleport_region.map_code });
+      return;
+    }
+  }
 }
 
 fn poll_map_load_requested(
