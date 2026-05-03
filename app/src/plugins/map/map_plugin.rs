@@ -13,12 +13,12 @@ use bevy_ecs_tilemap::tiles::TileStorage;
 
 use crate::assets::tiled_map_json::{TiledMapJson, TiledMapJsonLayer};
 use crate::components::structure_tile::StructureTile;
+use crate::components::teleport_region::TeleportRegion;
 use crate::data::map_data::MAP_DATA_STORE;
 use crate::messages::load_map_requested::LoadMapRequested;
 use crate::messages::loaded_map::{LoadedMap};
-use crate::models::map_code::MapCode;
-use crate::plugins::map::map_constants::{BBHQ_CEO_TILEMAP_PATH, BBHQ_COURTYARD_TILEMAP_PATH, BBHQ_GOLFCOURSE_TILEMAP_PATH, BBHQ_LOBBY_TILEMAP_PATH, BBHQ_STRUCTURES_IMAGE_PATH, BBHQ_TERRAIN_IMAGE_PATH, BR_PLAYGROUND_TILEMAP_PATH, BR_STREETS_TILEMAP_PATH, BR_TILESET_STRUCTURES_IMAGE_PATH, BR_TILESET_TERRAIN_IMAGE_PATH, CBHQ_CFO_TILEMAP_PATH, CBHQ_COURTYARD_TILEMAP_PATH, CBHQ_LOBBY_TILEMAP_PATH, CBHQ_MINT_TILEMAP_PATH, CBHQ_STRUCTURES_IMAGE_PATH, CBHQ_TERRAIN_IMAGE_PATH, COGBUILDING_BB_TILEMAP_PATH, COGBUILDING_CB_TILEMAP_PATH, COGBUILDING_LB_TILEMAP_PATH, COGBUILDING_SB_TILEMAP_PATH, COGBUILDING_TILESET_STRUCTURES_IMAGE_PATH, COGBUILDING_TILESET_TERRAIN_IMAGE_PATH, DD_PLAYGROUND_TILEMAP_PATH, DD_STREETS_TILEMAP_PATH, DD_TILESET_STRUCTURES_IMAGE_PATH, DD_TILESET_TERRAIN_IMAGE_PATH, DDL_PLAYGROUND_TILEMAP_PATH, DDL_STREETS_TILEMAP_PATH, DDL_TILESET_STRUCTURES_IMAGE_PATH, DDL_TILESET_TERRAIN_IMAGE_PATH, DG_PLAYGROUND_TILEMAP_PATH, DG_STREETS_TILEMAP_PATH, DG_TILESET_STRUCTURES_IMAGE_PATH, DG_TILESET_TERRAIN_IMAGE_PATH, LBHQ_CJ_TILEMAP_PATH, LBHQ_COURTYARD_TILEMAP_PATH, LBHQ_DAOFFICE_TILEMAP_PATH, LBHQ_LOBBY_TILEMAP_PATH, LBHQ_STRUCTURES_IMAGE_PATH, LBHQ_TERRAIN_IMAGE_PATH, MML_PLAYGROUND_TILEMAP_PATH, MML_STREETS_TILEMAP_PATH, MML_TILESET_STRUCTURES_IMAGE_PATH, MML_TILESET_TERRAIN_IMAGE_PATH, SBHQ_COURTYARD_TILEMAP_PATH, SBHQ_FACTORY_TILEMAP_PATH, SBHQ_LOBBY_TILEMAP_PATH, SBHQ_STRUCTURES_IMAGE_PATH, SBHQ_TERRAIN_IMAGE_PATH, SBHQ_VP_TILEMAP_PATH, TILEMAP_LAYER_INDEX_OBJECTS, TTC_PLAYGROUND_TILEMAP_PATH, TTC_STREETS_TILEMAP_PATH, TTC_TILESET_STRUCTURES_IMAGE_PATH, TTC_TILESET_TERRAIN_IMAGE_PATH};
-use crate::plugins::map::map_utils::{get_map_bounds, spawn_map};
+use crate::plugins::map::map_constants::TILEMAP_LAYER_INDEX_OBJECTS;
+use crate::plugins::map::map_utils::{get_map_bounds, get_structures_image_path, get_terrain_image_path, get_tilemap_json_path, process_map_object, spawn_map};
 use crate::resources::map_context::MapContext;
 use crate::resources::map_load_tracker::MapLoadTracker;
 use crate::states::app_state::AppState;
@@ -37,6 +37,7 @@ fn despawn_on_exit(
   mut commands: Commands,
   tilemaps_query: Query<(Entity, &mut TileStorage)>,
   structure_tiles_query: Query<Entity, With<StructureTile>>,
+  teleport_regions_query: Query<Entity, With<TeleportRegion>>,
 ) {
   // Cleanup tilemaps and nested tilemap tiles (tiles in tilemaps)
   for (tilemap_entity, mut tile_storage) in tilemaps_query {
@@ -49,6 +50,11 @@ fn despawn_on_exit(
   // Cleanup non-tilemap tile sprites (tiles not in tilemaps)
   for tile_entity in structure_tiles_query {
     commands.entity(tile_entity).despawn();
+  }
+
+  // Cleanup teleport regions
+  for teleport_region_entity in teleport_regions_query {
+    commands.entity(teleport_region_entity).despawn();
   }
 }
 
@@ -79,73 +85,13 @@ fn poll_load_map_requested(
   };
 
   // Figure out which terrain tilset and start loading
-  let tileset_terrain_image_path = match message.map_code {
-    MapCode::TtcPlayground | MapCode::TtcStreet => TTC_TILESET_TERRAIN_IMAGE_PATH,
-    MapCode::DdPlayground | MapCode::DdStreet => DD_TILESET_TERRAIN_IMAGE_PATH,
-    MapCode::DgPlayground | MapCode::DgStreet => DG_TILESET_TERRAIN_IMAGE_PATH,
-    MapCode::MmlPlayground | MapCode::MmlStreet => MML_TILESET_TERRAIN_IMAGE_PATH,
-    MapCode::BrPlayground | MapCode::BrStreet => BR_TILESET_TERRAIN_IMAGE_PATH,
-    MapCode::DdlPlayground | MapCode::DdlStreet => DDL_TILESET_TERRAIN_IMAGE_PATH,
-    MapCode::CogBuildingBb | MapCode::CogBuildingLb | MapCode::CogBuildingCb | MapCode::CogBuildingSb => COGBUILDING_TILESET_TERRAIN_IMAGE_PATH,
-    MapCode::SbhqCourtyard | MapCode::SbhqFactory | MapCode::SbhqLobby | MapCode::SbhqVp => SBHQ_TERRAIN_IMAGE_PATH,
-    MapCode::CbhqCourtyard | MapCode::CbhqMint | MapCode::CbhqLobby | MapCode::CbhqCfo => CBHQ_TERRAIN_IMAGE_PATH,
-    MapCode::LbhqCourtyard | MapCode::LbhqDaOffice | MapCode::LbhqLobby | MapCode::LbhqCj => LBHQ_TERRAIN_IMAGE_PATH,
-    MapCode::BbhqCourtyard | MapCode::BbhqGolfCourse | MapCode::BbhqLobby | MapCode::BbhqCeo => BBHQ_TERRAIN_IMAGE_PATH,
-  };
-  let tileset_terrain_image_handle = asset_server.load::<Image>(tileset_terrain_image_path);
+  let tileset_terrain_image_handle = asset_server.load::<Image>(get_terrain_image_path(&message.map_code));
 
   // Figure out which structure tileset and starting loading
-  let tileset_structure_image_path = match message.map_code {
-    MapCode::TtcPlayground | MapCode::TtcStreet => TTC_TILESET_STRUCTURES_IMAGE_PATH,
-    MapCode::DdPlayground | MapCode::DdStreet => DD_TILESET_STRUCTURES_IMAGE_PATH,
-    MapCode::DgPlayground | MapCode::DgStreet => DG_TILESET_STRUCTURES_IMAGE_PATH,
-    MapCode::MmlPlayground | MapCode::MmlStreet => MML_TILESET_STRUCTURES_IMAGE_PATH,
-    MapCode::BrPlayground | MapCode::BrStreet => BR_TILESET_STRUCTURES_IMAGE_PATH,
-    MapCode::DdlPlayground | MapCode::DdlStreet => DDL_TILESET_STRUCTURES_IMAGE_PATH,
-    MapCode::CogBuildingBb | MapCode::CogBuildingLb | MapCode::CogBuildingCb | MapCode::CogBuildingSb => COGBUILDING_TILESET_STRUCTURES_IMAGE_PATH,
-    MapCode::SbhqCourtyard | MapCode::SbhqFactory | MapCode::SbhqLobby | MapCode::SbhqVp => SBHQ_STRUCTURES_IMAGE_PATH,
-    MapCode::CbhqCourtyard | MapCode::CbhqMint | MapCode::CbhqLobby | MapCode::CbhqCfo => CBHQ_STRUCTURES_IMAGE_PATH,
-    MapCode::LbhqCourtyard | MapCode::LbhqDaOffice | MapCode::LbhqLobby | MapCode::LbhqCj => LBHQ_STRUCTURES_IMAGE_PATH,
-    MapCode::BbhqCourtyard | MapCode::BbhqGolfCourse | MapCode::BbhqLobby | MapCode::BbhqCeo => BBHQ_STRUCTURES_IMAGE_PATH,
-  };
-  let tileset_structure_image_handle = asset_server.load::<Image>(tileset_structure_image_path);
+  let tileset_structure_image_handle = asset_server.load::<Image>(get_structures_image_path(&message.map_code));
 
   // Figure out which tilemap and start loading
-  let tilemap_json_path = match message.map_code {
-    MapCode::TtcPlayground => TTC_PLAYGROUND_TILEMAP_PATH,
-    MapCode::TtcStreet => TTC_STREETS_TILEMAP_PATH,
-    MapCode::DdPlayground => DD_PLAYGROUND_TILEMAP_PATH,
-    MapCode::DdStreet => DD_STREETS_TILEMAP_PATH,
-    MapCode::DgPlayground => DG_PLAYGROUND_TILEMAP_PATH,
-    MapCode::DgStreet => DG_STREETS_TILEMAP_PATH,
-    MapCode::MmlPlayground => MML_PLAYGROUND_TILEMAP_PATH,
-    MapCode::MmlStreet => MML_STREETS_TILEMAP_PATH,
-    MapCode::BrPlayground => BR_PLAYGROUND_TILEMAP_PATH,
-    MapCode::BrStreet => BR_STREETS_TILEMAP_PATH,
-    MapCode::DdlPlayground => DDL_PLAYGROUND_TILEMAP_PATH,
-    MapCode::DdlStreet => DDL_STREETS_TILEMAP_PATH,
-    MapCode::CogBuildingBb => COGBUILDING_BB_TILEMAP_PATH,
-    MapCode::CogBuildingLb => COGBUILDING_LB_TILEMAP_PATH,
-    MapCode::CogBuildingCb => COGBUILDING_CB_TILEMAP_PATH,
-    MapCode::CogBuildingSb => COGBUILDING_SB_TILEMAP_PATH,
-    MapCode::SbhqCourtyard => SBHQ_COURTYARD_TILEMAP_PATH,
-    MapCode::SbhqFactory => SBHQ_FACTORY_TILEMAP_PATH,
-    MapCode::SbhqLobby => SBHQ_LOBBY_TILEMAP_PATH,
-    MapCode::SbhqVp => SBHQ_VP_TILEMAP_PATH,
-    MapCode::CbhqCourtyard => CBHQ_COURTYARD_TILEMAP_PATH,
-    MapCode::CbhqMint => CBHQ_MINT_TILEMAP_PATH,
-    MapCode::CbhqLobby => CBHQ_LOBBY_TILEMAP_PATH,
-    MapCode::CbhqCfo => CBHQ_CFO_TILEMAP_PATH,
-    MapCode::LbhqCourtyard => LBHQ_COURTYARD_TILEMAP_PATH,
-    MapCode::LbhqDaOffice => LBHQ_DAOFFICE_TILEMAP_PATH,
-    MapCode::LbhqLobby => LBHQ_LOBBY_TILEMAP_PATH,
-    MapCode::LbhqCj => LBHQ_CJ_TILEMAP_PATH,
-    MapCode::BbhqCourtyard => BBHQ_COURTYARD_TILEMAP_PATH,
-    MapCode::BbhqGolfCourse => BBHQ_GOLFCOURSE_TILEMAP_PATH,
-    MapCode::BbhqLobby => BBHQ_LOBBY_TILEMAP_PATH,
-    MapCode::BbhqCeo => BBHQ_CEO_TILEMAP_PATH,
-  };
-  let tilemap_json_handle = asset_server.load::<TiledMapJson>(tilemap_json_path);
+  let tilemap_json_handle = asset_server.load::<TiledMapJson>(get_tilemap_json_path(&message.map_code));
 
   // Track the load
   let map_load_tracker = MapLoadTracker {
@@ -191,19 +137,22 @@ fn check_map_loaded(
   let tilemap_json = tiled_map_json_assets.get(tracker.tilemap_json_handle.id())
     .expect("Failed to load tilemap file");
 
+  // Delete the map load tracker
+  commands.remove_resource::<MapLoadTracker>();
+
+  // Delete the old map context
+  if map_context.is_some() {
+    commands.remove_resource::<MapContext>();
+  }
+
   // Spawn the map
-  info!("Map loading, spawning map for {:?}", tracker.map_code);
+  info!("Map loaded, spawning map for {:?}", tracker.map_code);
   spawn_map(
     &mut commands,
     tilemap_json,
     tracker.tileset_terrain_image_handle.clone(),
     tracker.tileset_structure_image_handle.clone(),
   ).expect("Map file is corrupted");
-
-  // Delete the old map context
-  if map_context.is_some() {
-    commands.remove_resource::<MapContext>();
-  }
 
   // Save the new map context
   let new_map_context = MapContext {
@@ -222,6 +171,17 @@ fn check_map_loaded(
       vec![]
      },
   };
+
+  // Handle map objects (regions)
+  for map_object in &map_objects {
+    process_map_object(
+      &mut commands,
+      map_object,
+      tilemap_json.tilewidth,
+      tilemap_json.tileheight,
+      tilemap_json.height,
+    );
+  }
 
   // Signal map loaded
   let loaded_map_message = LoadedMap {
