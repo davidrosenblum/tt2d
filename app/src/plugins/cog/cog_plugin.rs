@@ -3,13 +3,10 @@ use bevy::ecs::entity::Entity;
 use bevy::ecs::message::MessageReader;
 use bevy::ecs::query::{Changed, With};
 use bevy::ecs::system::{Commands, If, Query, Res};
-use bevy::log::{info, warn};
-use bevy::math::Vec2;
 use bevy::sprite::Sprite;
 use bevy::time::Time;
 use bevy::transform::components::Transform;
 
-use crate::assets::tiled_map_json::{TiledMapJsonObjectPropertyName, TiledMapJsonObjectType};
 use crate::components::cog::Cog;
 use crate::components::cog_animation::CogAnimation;
 use crate::components::cog_sprite::CogSprite;
@@ -17,11 +14,9 @@ use crate::components::sprite_animation_state::SpriteAnimationState;
 use crate::components::unit_facing::UnitFacing;
 use crate::messages::load_map_requested::LoadMapRequested;
 use crate::messages::loaded_map::LoadedMap;
-use crate::models::cog_department_code::CogDepartmentCode;
 use crate::models::facing_code::FacingCode;
-use crate::plugins::cog::cog_utils::build_cog_bundle_from_dept_tier;
+use crate::plugins::cog::cog_utils::process_map_object;
 use crate::resources::cog_sprite_store::CogSpriteStore;
-use crate::utils::normalize_tiled_point::normalize_tiled_point;
 
 pub struct CogPlugin;
 
@@ -102,54 +97,18 @@ fn poll_map_loaded(
   };
   
   for map_object in &message.map_objects {
-    if map_object.object_type == TiledMapJsonObjectType::CogSpawner {
-      let Some(properties) = &map_object.properties else {
-        warn!("CogSpawner missing properties");
-        continue;
-      };
-
-      let Some(cog_department_code) = properties.iter().find_map(|prop| {
-        if prop.name == TiledMapJsonObjectPropertyName::CogSpawnerDepartment {
-          return prop.value.parse::<CogDepartmentCode>().ok();
-        }
-        None
-      }) else {
-        warn!("CogSpawner missing or invalid department");
-        continue;
-      };
-
-      let Some(tier) = properties.iter().find_map(|prop| {
-        if prop.name == TiledMapJsonObjectPropertyName::CogSpawnerTier {
-          return prop.value.parse::<u32>().ok();
-        }
-        None
-      }) else {
-        warn!("CogSpawner missing or invalid tier");
-        continue;
-      };
-
-      let facing_code = properties.iter().find_map(|prop| {
-        if prop.name == TiledMapJsonObjectPropertyName::CogSpawnerFacing {
-          return prop.value.parse::<FacingCode>().ok();
-        }
-        None
-      }).unwrap_or_default();
-
-      let position_map = Vec2::new(map_object.x as f32, map_object.y as f32);
-      let position = normalize_tiled_point(&position_map, message.tilewidth, message.tileheight, message.height);
-      
-      if let Some(cog_bundle) = build_cog_bundle_from_dept_tier(
-        cog_department_code,
-        facing_code,
-        tier,
-        position,
-        &cog_sprite_store,
-      ) {
-        commands.spawn(cog_bundle);
-        info!("Spawned cog: {:?}:{:?}", cog_department_code, tier);
-      } else {
-        warn!("CogSpawner cog data missing: {:?}:{:?}", cog_department_code, tier);
-      }
-    }
+    process_map_object(
+      &mut commands,
+      map_object,
+      &cog_sprite_store,
+      message.tilewidth,
+      message.tileheight,
+      message.height,
+    );
   }
 }
+
+// TODO cog region
+// Need a region concept that 1) spawns cogs randomly and 2) attaches cogs to the region to not leave its bounds
+// Where should the region Rect live? Is that a resource?
+// Also, update MapData to have all the maps
