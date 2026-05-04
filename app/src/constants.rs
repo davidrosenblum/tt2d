@@ -4,7 +4,7 @@ pub const VIEWPORT_HEIGHT: u32 = 720;
 
 // Size of sprites when rendered
 pub const TILE_SIZE: f32 = 64.;   // Source is 32x32
-pub const COG_SIZE: f32 = 96.;    // Source is 48x48
+pub const COG_SIZE: f32 = 128.;   // Source is 64x64
 pub const TOON_SIZE: f32 = 96.;   // Source is 48x48
 
 // Z-Index values for map layer position
