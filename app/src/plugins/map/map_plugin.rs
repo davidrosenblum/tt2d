@@ -6,6 +6,8 @@ use bevy::ecs::query::With;
 use bevy::ecs::schedule::IntoScheduleConfigs;
 use bevy::ecs::system::{Commands, If, Query, Res, ResMut};
 use bevy::image::Image;
+use bevy::input::ButtonInput;
+use bevy::input::keyboard::KeyCode;
 use bevy::log::{info, warn};
 use bevy::state::condition::in_state;
 use bevy::state::state::{NextState, OnExit};
@@ -115,6 +117,7 @@ fn check_map_loaded(
   map_context: Option<Res<MapContext>>,
   tiled_map_json_assets: Res<Assets<TiledMapJson>>,
   asset_server: Res<AssetServer>,
+  mut button_input: ResMut<ButtonInput<KeyCode>>,
   mut next_state: ResMut<NextState<AppState>>,
 ) {
   // Check if still loading the tileset images
@@ -192,6 +195,9 @@ fn check_map_loaded(
     prev_map_code: map_context.and_then(|mc| Some(mc.map_code)),
   };
   loaded_map_message_witer.write(loaded_map_message);
+
+  // Stop any movement to prevent walking into exit tunnel immediately
+  button_input.release_all();
 
   // Show the game
   next_state.set(AppState::InGame);
