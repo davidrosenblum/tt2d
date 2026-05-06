@@ -12,7 +12,7 @@ use bevy::sprite::Sprite;
 use bevy::time::Time;
 use bevy::transform::components::Transform;
 
-use crate::assets::tiled_map_json::{TiledMapJsonObjectPropertyName, TiledMapJsonObjectType};
+use crate::assets::tiled_map_json::{TiledMapJsonObject, TiledMapJsonObjectPropertyName, TiledMapJsonObjectType};
 use crate::components::player_controlled::PlayerControlled;
 use crate::components::sprite_animation_state::SpriteAnimationState;
 use crate::components::teleport_region::TeleportRegion;
@@ -28,6 +28,7 @@ use crate::messages::loaded_map::{LoadedMap};
 use crate::models::asset_toon_animation_code::AssetToonAnimationCode;
 use crate::models::asset_toon_sprite_code::AssetToonSpriteCode;
 use crate::models::facing_code::FacingCode;
+use crate::models::map_code::MapCode;
 use crate::models::toon_companion_code::ToonCompanionCode;
 use crate::models::toon_npc_code::ToonNpcCode;
 use crate::plugins::toon::toon_utils::{build_toon_bundle, build_toon_companion_bundle, build_toon_npc_bundle};
@@ -37,6 +38,7 @@ use crate::utils::get_z_from_y::get_z_from_y;
 use crate::utils::normalize_tiled_point::normalize_tiled_point;
 
 const HALF_TOON_SIZE: f32 = TOON_SIZE / 2.;
+const HALF_TILE_SIZE: f32 = TILE_SIZE / 2.;
 
 pub struct ToonPlugin;
 
@@ -306,8 +308,8 @@ fn check_teleport_region_collision(
   let player_rect = Rect::new(
     player_transform.translation.x,
     player_transform.translation.y,
-    player_transform.translation.x + TILE_SIZE,
-    player_transform.translation.y + TILE_SIZE,
+    player_transform.translation.x + HALF_TILE_SIZE,
+    player_transform.translation.y + HALF_TILE_SIZE,
   );
   for teleport_region in teleport_regions_query {
     if !teleport_region.bounds.intersect(player_rect).is_empty() {
@@ -336,7 +338,6 @@ fn poll_map_load_requested(
 fn poll_map_loaded(
   mut commands: Commands,
   mut message_reader: MessageReader<LoadedMap>,
-  map_context: If<Res<MapContext>>,
   toon_sprite_store: If<Res<ToonSpriteStore>>,
 ) {
   let Some(message) = message_reader.read().last() else {
@@ -344,27 +345,12 @@ fn poll_map_loaded(
   };
 
   // Spawn toons
+  let mut player_spawners = Vec::<&TiledMapJsonObject>::new();
   for map_object in &message.map_objects {
     match map_object.object_type {
       TiledMapJsonObjectType::PlayerSpawner => {
-        let position_map = Vec2::new(map_object.x as f32, map_object.y as f32);
-        let position = normalize_tiled_point(&position_map, message.tilewidth, message.tileheight, message.height);
-
-        if let Some(toon_bundle) = build_toon_bundle(
-          AssetToonSpriteCode::Player,
-          FacingCode::Right,
-          "Player",
-          position,
-          &toon_sprite_store
-        ) {
-          commands.spawn((
-            PlayerControlled,
-            toon_bundle,
-          ));
-          info!("Spawned toon player");
-        } else {
-          warn!("PlayerSpawner failed to spawn player");
-        }
+        // Capture all player spawners, at the end determine which to spawn at
+        player_spawners.push(map_object);
       },
       TiledMapJsonObjectType::ToonCompanionSpawner => {
         let Some(properties) = &map_object.properties else {
@@ -402,7 +388,7 @@ fn poll_map_loaded(
           info!("Spawned toon companion: {:?}", companion_code);
 
           // Only "activate" companions if the map allows it
-          if map_context.map_data.companions_enabled {
+          if message.map_data.companions_enabled {
             commands.entity(toon_entity).insert(ToonCompanionActive);
             info!("Making companion active: {:?}", companion_code);
           }
@@ -450,5 +436,51 @@ fn poll_map_loaded(
       },
       _ => (),
     }
+  }
+
+  // Spawn player
+  // Find a spawner linked to previous map (tunnel transitions)
+  // Otherwise, look to spawner linked to current map (default sapawn on app load)
+  // Finally, look for the first first spawner regarless of its link
+  // If all else fails, panic due to bad data
+  let prev_map_code = message.prev_map_code.unwrap_or_else(|| message.map_data.map_code);
+  let player_spawner = player_spawners.iter().find(|ps| {
+    let Some(properties) = &ps.properties else {
+      warn!("PlayerSpawner missing properties");
+      return false;
+    };
+
+    let Some(player_from_location) = properties.iter().find_map(|prop| {
+      if prop.name == TiledMapJsonObjectPropertyName::PlayerFromLocation {
+        return prop.value.parse::<MapCode>().ok();
+      }
+      return None;
+    }) else {
+      warn!("PlayerSpawner missing or invalid map code");
+      return false;
+    };
+
+   player_from_location == prev_map_code
+  })
+    .or_else(|| player_spawners.first())
+    .expect("Map does not define any player spawns");
+
+  let position_map = Vec2::new(player_spawner.x as f32, player_spawner.y as f32);
+  let position = normalize_tiled_point(&position_map, message.tilewidth, message.tileheight, message.height);
+
+  if let Some(toon_bundle) = build_toon_bundle(
+    AssetToonSpriteCode::Player,
+    FacingCode::Right,
+    "Player",
+    position,
+    &toon_sprite_store
+  ) {
+    commands.spawn((
+      PlayerControlled,
+      toon_bundle,
+    ));
+    info!("Spawned toon player");
+  } else {
+    warn!("PlayerSpawner failed to spawn player");
   }
 }

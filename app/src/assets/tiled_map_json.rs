@@ -79,6 +79,10 @@ pub enum TiledMapJsonObjectPropertyName {
   #[serde(rename = "cog_tier")]
   CogSpawnerTier,
 
+  // PlayerSpawner
+  #[serde(rename = "player_from_location")]
+  PlayerFromLocation,
+
   // ToonCompanionSpawner
   #[serde(rename = "companion")]
   ToonCompanionSpawnerCompanion,

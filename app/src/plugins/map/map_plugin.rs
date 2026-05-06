@@ -159,7 +159,6 @@ fn check_map_loaded(
     map_code: tracker.map_code,
     map_data: tracker.map_data,
     bounds: get_map_bounds(tilemap_json),
-    prev_map_hub_code: map_context.and_then(|mc| mc.map_data.map_hub_code),
   };
   commands.insert_resource(new_map_context);
 
@@ -189,6 +188,8 @@ fn check_map_loaded(
     tilewidth: tilemap_json.tilewidth,
     tileheight: tilemap_json.tileheight,
     height: tilemap_json.height,
+    map_data: tracker.map_data,
+    prev_map_code: map_context.and_then(|mc| Some(mc.map_code)),
   };
   loaded_map_message_witer.write(loaded_map_message);
 

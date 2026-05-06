@@ -1,6 +1,8 @@
 use bevy::ecs::message::Message;
 
 use crate::assets::tiled_map_json::TiledMapJsonObject;
+use crate::data::map_data::MapData;
+use crate::models::map_code::MapCode;
 
 #[derive(Message)]
 pub struct LoadedMap {
@@ -10,4 +12,7 @@ pub struct LoadedMap {
   pub tilewidth: u32,
   pub tileheight: u32,
   pub height: u32,
+  
+  pub map_data: MapData,
+  pub prev_map_code: Option<MapCode>,
 }
