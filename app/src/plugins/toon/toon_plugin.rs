@@ -13,6 +13,9 @@ use bevy::time::Time;
 use bevy::transform::components::Transform;
 
 use crate::assets::tiled_map_json::{TiledMapJsonObject, TiledMapJsonObjectPropertyName, TiledMapJsonObjectType};
+use crate::components::combat_bundle::CombatBundle;
+use crate::components::combat_health::CombatHealth;
+use crate::components::combat_melee_attack::CombatMeleeAttack;
 use crate::components::player_controlled::PlayerControlled;
 use crate::components::sprite_animation_state::SpriteAnimationState;
 use crate::components::teleport_region::TeleportRegion;
@@ -477,6 +480,11 @@ fn poll_map_loaded(
   ) {
     commands.spawn((
       PlayerControlled,
+      CombatBundle {
+        // TODO from level
+        health: CombatHealth::new(15.),
+        melee_attack: CombatMeleeAttack::new(2.5, (1., 2.)),
+      },
       toon_bundle,
     ));
     info!("Spawned toon player");

@@ -5,6 +5,9 @@ use bevy::sprite::{Anchor, Sprite};
 use bevy::transform::components::Transform;
 use uuid::Uuid;
 
+use crate::components::combat_bundle::CombatBundle;
+use crate::components::combat_health::CombatHealth;
+use crate::components::combat_melee_attack::CombatMeleeAttack;
 use crate::components::sprite_animation_state::SpriteAnimationState;
 use crate::components::toon::Toon;
 use crate::components::toon_animation::ToonAnimation;
@@ -76,6 +79,10 @@ pub fn build_toon_companion_bundle(
     build_toon_bundle(companion_data.sprite_code, *facing_code, companion_data.name, position, toon_sprite_store)?,
     ToonCompanion {
       companion_code: companion_data.companion_code,
+    },
+    CombatBundle {
+      health: CombatHealth::new(companion_data.health as f32),
+      melee_attack: CombatMeleeAttack::new(companion_data.melee_attack.cooldown, companion_data.melee_attack.damage_range),
     },
   );
   Some(bundle)

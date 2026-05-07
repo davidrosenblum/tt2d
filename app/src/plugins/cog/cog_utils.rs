@@ -12,6 +12,9 @@ use crate::components::cog::Cog;
 use crate::components::cog_animation::CogAnimation;
 use crate::components::cog_bundle::CogBundle;
 use crate::components::cog_sprite::CogSprite;
+use crate::components::combat_bundle::CombatBundle;
+use crate::components::combat_health::CombatHealth;
+use crate::components::combat_melee_attack::CombatMeleeAttack;
 use crate::components::sprite_animation_state::SpriteAnimationState;
 use crate::components::unit::Unit;
 use crate::components::unit_facing::UnitFacing;
@@ -66,19 +69,24 @@ pub fn build_cog_bundle(
   Some(cog_bundle)
 }
 
-pub fn build_cog_bundle_from_dept_tier(
+pub fn build_cog_bundles_from_dept_tier(
   cog_department_code: CogDepartmentCode,
   facing_code: FacingCode,
   tier: u32,
   position: Vec2,
   cog_sprite_store: &CogSpriteStore,
-) -> Option<CogBundle> {
+) -> Option<(CogBundle, CombatBundle)> {
   let Some(cog_data) = COG_DATA_STORE.iter().find(|cog_data| {
     cog_data.department_code == cog_department_code && cog_data.tier == tier
   }) else {
     return None;
   };
-  build_cog_bundle(cog_data, facing_code, position, cog_sprite_store)
+  let cog_bundle = build_cog_bundle(cog_data, facing_code, position, cog_sprite_store)?;
+  let combat_bundle = CombatBundle {
+    health: CombatHealth::new(cog_data.health as f32),
+    melee_attack: CombatMeleeAttack::new(cog_data.melee_attack.cooldown, cog_data.melee_attack.damage_range),
+  };
+  Some((cog_bundle, combat_bundle))
 }
 
 pub fn process_map_cog_spawner(
@@ -124,14 +132,14 @@ pub fn process_map_cog_spawner(
   let position_map = Vec2::new(map_object.x as f32, map_object.y as f32);
   let position = normalize_tiled_point(&position_map, tilewidth, tileheight, map_height);
   
-  if let Some(cog_bundle) = build_cog_bundle_from_dept_tier(
+  if let Some(bundles) = build_cog_bundles_from_dept_tier(
     cog_department_code,
     facing_code,
     tier,
     position,
     &cog_sprite_store,
   ) {
-    commands.spawn(cog_bundle);
+    commands.spawn(bundles);
     info!("Spawned cog: {:?}:{:?}", cog_department_code, tier);
   } else {
     warn!("CogSpawner cog data missing: {:?}:{:?}", cog_department_code, tier);
@@ -201,7 +209,7 @@ pub fn process_map_cog_region(
     return;
   };
 
-  let count_safe = std::cmp::max(1, count) * 5;
+  let count_safe = std::cmp::max(1, count);
   let _difficult_safe = std::cmp::max(1, difficulty);
   let tier_min_safe = std::cmp::max(1, tier_min);
   let tier_max_safe = std::cmp::max(tier_min_safe, tier_max);
@@ -222,6 +230,7 @@ pub fn process_map_cog_region(
   let mut rng = rand::rng();
 
   // Populate array with tiers to create based on count and difficulty
+  // let tier_range = tier_max_safe - tier_min_safe;
   let mut tiers = Vec::<u32>::new();
   for _ in 0 .. count_safe {
     // TODO apply difficulty
@@ -237,14 +246,14 @@ pub fn process_map_cog_region(
 
     let facing_code = if x <= region_rect.center().x { FacingCode::Right } else { FacingCode::Left };
 
-    if let Some(cog_bundle) = build_cog_bundle_from_dept_tier(
+    if let Some(bundles) = build_cog_bundles_from_dept_tier(
       cog_department_code,
       facing_code,
       tier,
       position,
       &cog_sprite_store,
     ) {
-      commands.spawn(cog_bundle);
+      commands.spawn(bundles);
       info!("Spawned region cog: {:?}:{:?}", cog_department_code, tier);
     } else {
       warn!("CogRegion cog data missing: {:?}:{:?}", cog_department_code, tier);
