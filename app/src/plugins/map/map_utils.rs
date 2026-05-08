@@ -15,7 +15,7 @@ use crate::components::teleport_region::TeleportRegion;
 use crate::constants::{STRUCTURE_TOP_Z_INDEX, TERRAIN_Z_INDEX, TILE_SIZE};
 use crate::errors::tilemap_spawn_error::TilemapSpawnError;
 use crate::models::map_code::MapCode;
-use crate::plugins::map::map_constants;
+use crate::plugins::map::map_constants::{self, TILEMAP_LAYER_INDEX_STRUCTURES_BASE};
 use crate::utils::get_z_from_y::get_z_from_y;
 use crate::utils::normalize_tiled_point::normalize_tiled_point;
 
@@ -140,6 +140,20 @@ pub fn get_map_bounds(tilemap_json: &TiledMapJson) -> Rect {
     tilemap_json.width as f32 * TILE_SIZE, // Right
     tilemap_json.height as f32 * TILE_SIZE, // Top
   )
+}
+
+pub fn get_collision_mask(tilemap_json: &TiledMapJson) -> Vec<bool> {
+  let Some(layer) = tilemap_json.layers.get(TILEMAP_LAYER_INDEX_STRUCTURES_BASE) else {
+    warn!("get_collision_mask: Structures base layer is missing");
+    return vec![];
+  };
+
+  let TiledMapJsonLayer::Tile(tile_layer) = layer else {
+    warn!("get_collision_mask: Structures base layer is not a tile layer");
+    return vec![];
+  };
+
+  tile_layer.data.iter().map(|tile_id| *tile_id > 0).collect()
 }
 
 /** Figure out bevy (x, y) in a 1d array. This is not pixels but grid coordinates (think col/row). */

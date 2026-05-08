@@ -20,7 +20,7 @@ use crate::data::map_data::MAP_DATA_STORE;
 use crate::messages::load_map_requested::LoadMapRequested;
 use crate::messages::loaded_map::{LoadedMap};
 use crate::plugins::map::map_constants::TILEMAP_LAYER_INDEX_OBJECTS;
-use crate::plugins::map::map_utils::{get_map_bounds, get_structures_image_path, get_terrain_image_path, get_tilemap_json_path, process_map_object, spawn_map};
+use crate::plugins::map::map_utils::{get_collision_mask, get_map_bounds, get_structures_image_path, get_terrain_image_path, get_tilemap_json_path, process_map_object, spawn_map};
 use crate::resources::map_context::MapContext;
 use crate::resources::map_load_tracker::MapLoadTracker;
 use crate::states::app_state::AppState;
@@ -162,6 +162,8 @@ fn check_map_loaded(
     map_code: tracker.map_code,
     map_data: tracker.map_data,
     bounds: get_map_bounds(tilemap_json),
+    collision_mask: get_collision_mask(tilemap_json),
+    width_in_tiles: tilemap_json.width,
   };
   commands.insert_resource(new_map_context);
 

@@ -224,6 +224,10 @@ fn update_player_keyboard_movement(
   let delta_secs = time.delta_secs();
   let distance = unit_movement.speed * delta_secs * 100. * 3.; // TODO remove 3.
 
+  let start_x = transform.translation.x;
+  let start_y = transform.translation.y;
+  let start_z = transform.translation.z;
+
   // Move up or down
   let mut did_move_y = false;
   const KEYS_UP: [KeyCode; 2] = [KeyCode::KeyW, KeyCode::ArrowUp];
@@ -296,7 +300,18 @@ fn update_player_keyboard_movement(
   }
 
   // TODO check collision
-  if unit_movement.is_collision_enabled {}
+  if unit_movement.is_collision_enabled {
+    let tile_x = (transform.translation.x / TILE_SIZE).floor();
+    let tile_y = ((map_context.bounds.max.y - transform.translation.y) / TILE_SIZE).floor();
+    let tile_y_adjusted = if tile_y > 0. { tile_y - 1. } else { tile_y };
+    let collision_index = (tile_y_adjusted * map_context.width_in_tiles as f32 + tile_x) as usize;
+    let is_colliding = *map_context.collision_mask.get(collision_index).unwrap_or_else(|| &false);
+    if is_colliding {
+      transform.translation.x = start_x;
+      transform.translation.y = start_y;
+      transform.translation.z = start_z;
+    }
+  }
 }
 
 fn check_teleport_region_collision(
