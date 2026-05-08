@@ -1,8 +1,9 @@
 use bevy::app::{Plugin, Update};
 use bevy::ecs::entity::Entity;
 use bevy::ecs::message::MessageReader;
-use bevy::ecs::query::{Changed, With};
+use bevy::ecs::query::{Changed, With, Without};
 use bevy::ecs::system::{Commands, If, Query, Res};
+use bevy::math::Rect;
 use bevy::sprite::Sprite;
 use bevy::time::Time;
 use bevy::transform::components::Transform;
@@ -10,22 +11,34 @@ use bevy::transform::components::Transform;
 use crate::components::cog::Cog;
 use crate::components::cog_animation::CogAnimation;
 use crate::components::cog_sprite::CogSprite;
+use crate::components::combat_health::CombatHealth;
+use crate::components::combat_target::CombatTarget;
 use crate::components::sprite_animation_state::SpriteAnimationState;
+use crate::components::toon::Toon;
 use crate::components::unit_facing::UnitFacing;
+use crate::components::unit_movement::UnitMovement;
+use crate::constants::{COG_SIZE, TILE_SIZE, TOON_SIZE};
 use crate::messages::load_map_requested::LoadMapRequested;
 use crate::messages::loaded_map::LoadedMap;
+use crate::models::asset_cog_animation_code::AssetCogAnimationCode;
 use crate::models::facing_code::FacingCode;
 use crate::plugins::cog::cog_utils::process_map_object;
 use crate::resources::cog_sprite_store::CogSpriteStore;
+use crate::utils::get_z_from_y::get_z_from_y;
 
 pub struct CogPlugin;
 
 impl Plugin for CogPlugin {
   fn build(&self, app: &mut bevy::app::App) {
     app.add_systems(Update, (update_cog_facing_direction, update_cog_animation_frame));
+    app.add_systems(Update, (update_cogs_acquire_target, update_cogs_follow_target));
     app.add_systems(Update, (poll_map_load_requested, poll_map_loaded));
   }
 }
+
+const SIGHT_RANGE: f32 = TILE_SIZE * 2.;
+const HALF_COG_SIZE: f32 = COG_SIZE / 2.;
+const HALF_TOON_SIZE: f32 = TOON_SIZE / 2.;
 
 fn update_cog_animation_frame(
   cogs_query: Query<(&CogSprite, &CogAnimation, &mut SpriteAnimationState, &mut Sprite), With<Cog>>,
@@ -66,6 +79,144 @@ fn update_cog_facing_direction(
       FacingCode::Left => -1.,
       FacingCode::Right => 1.,
     };
+  }
+}
+
+fn update_cogs_acquire_target(
+  mut commands: Commands,
+  cogs_query: Query<(Entity, &Transform), (With<Cog>, With<CombatHealth>, Without<CombatTarget>, Without<Toon>)>,
+  toons_query: Query<(Entity, &Transform), (With<Toon>, With<CombatHealth>, Without<Cog>)>,
+) {
+  for (cog_entity, cog_transform) in cogs_query {
+    let cog_sight_rect = Rect::new(
+      cog_transform.translation.x - HALF_COG_SIZE - SIGHT_RANGE,
+      cog_transform.translation.y - SIGHT_RANGE,
+      cog_transform.translation.x + HALF_COG_SIZE + SIGHT_RANGE,
+      cog_transform.translation.y + COG_SIZE + SIGHT_RANGE,
+    );
+
+    for (toon_entity, toon_transform) in toons_query {
+      let toon_rect = Rect::new(
+        toon_transform.translation.x - HALF_TOON_SIZE,
+        toon_transform.translation.y,
+        toon_transform.translation.x + HALF_TOON_SIZE,
+        toon_transform.translation.y + TOON_SIZE,
+      );
+      if !cog_sight_rect.intersect(toon_rect).is_empty() {
+        commands.entity(cog_entity).insert(CombatTarget(toon_entity));
+        continue;
+      }
+    }
+  }
+}
+
+fn update_cogs_follow_target(
+  mut commands: Commands,
+  cogs_query: Query<
+    (Entity, &mut Transform, &mut CogAnimation, &mut UnitFacing, &UnitMovement, &CombatTarget),
+    (With<Cog>, With<CombatHealth>, Without<Toon>)
+  >,
+  toons_query: Query<&Transform, (With<Toon>, With<CombatHealth>, Without<Cog>)>,
+  time: Res<Time>,
+) {
+  let delta_secs = time.delta_secs();
+  for (cog_entity, mut cog_transform, mut cog_animation, mut cog_facing, cog_movement, cog_target) in cogs_query {
+    // Respect movement flag
+    if !cog_movement.is_movement_enabled {
+      continue;
+    }
+
+    let distance = cog_movement.speed * delta_secs * 100.;
+    
+    let cog_sight_rect = Rect::new(
+      cog_transform.translation.x - HALF_COG_SIZE - SIGHT_RANGE,
+      cog_transform.translation.y - SIGHT_RANGE,
+      cog_transform.translation.x + HALF_COG_SIZE + SIGHT_RANGE,
+      cog_transform.translation.y + COG_SIZE + SIGHT_RANGE,
+    );
+    let cog_rect = Rect::new(
+      cog_transform.translation.x - TILE_SIZE,
+      cog_transform.translation.y,
+      cog_transform.translation.x + TILE_SIZE,
+      cog_transform.translation.y + TILE_SIZE,
+    );
+
+    if let Ok(toon_transform) = toons_query.get(**cog_target) {
+      let toon_rect = Rect::new(
+        toon_transform.translation.x - HALF_TOON_SIZE,
+        toon_transform.translation.y,
+        toon_transform.translation.x + HALF_TOON_SIZE,
+        toon_transform.translation.y + TOON_SIZE,
+      );
+
+      // Can no longer see target
+      if cog_sight_rect.intersect(toon_rect).is_empty() {
+        // Stop walking
+        if **cog_animation == AssetCogAnimationCode::Walk {
+          *cog_animation = CogAnimation(AssetCogAnimationCode::Idle);
+        }
+        // Abandon target
+        commands.entity(cog_entity).remove::<CombatTarget>();
+        continue;
+      }
+
+      // Already at toon
+      if !cog_rect.intersect(toon_rect).is_empty() {
+        // Stop walking
+        if **cog_animation == AssetCogAnimationCode::Walk {
+          *cog_animation = CogAnimation(AssetCogAnimationCode::Idle);
+        }
+        continue;
+      }
+
+      // Move/face cog to toon x
+      let mut did_move_x = false;
+      if cog_rect.max.x < toon_rect.min.x {
+        // Left to right
+        cog_transform.translation.x += distance;
+        did_move_x = true;
+        
+        if **cog_facing != FacingCode::Right {
+          *cog_facing = UnitFacing(FacingCode::Right);
+        }
+      } else if cog_rect.min.x > toon_rect.max.x {
+        // Right to left
+        cog_transform.translation.x -= distance;
+        did_move_x = true;
+
+        if **cog_facing != FacingCode::Left {
+          *cog_facing = UnitFacing(FacingCode::Left);
+        }
+      }
+
+      // Move/face cog to toon y
+      let mut did_move_y = false;
+      if cog_rect.max.y < toon_rect.min.y {
+        cog_transform.translation.y += distance;
+        did_move_y = true;
+      } else if cog_rect.min.y > toon_rect.max.y {
+        cog_transform.translation.y -= distance;
+        did_move_y = true;
+      }
+
+      // Did move
+      if did_move_x || did_move_y {
+        // Update animation
+        if **cog_animation != AssetCogAnimationCode::Walk {
+          *cog_animation = CogAnimation(AssetCogAnimationCode::Walk);
+        }
+      }
+
+      // Update z
+      if did_move_y {
+        cog_transform.translation.z = get_z_from_y(cog_transform.translation.y);
+      }
+
+      // TODO do not leave region
+      // - drop target
+
+      // Do not collide with other cogs in the region
+    }
   }
 }
 
