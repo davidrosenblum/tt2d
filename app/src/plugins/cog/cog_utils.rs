@@ -11,6 +11,8 @@ use crate::assets::tiled_map_json::{TiledMapJsonObject, TiledMapJsonObjectProper
 use crate::components::cog::Cog;
 use crate::components::cog_animation::CogAnimation;
 use crate::components::cog_bundle::CogBundle;
+use crate::components::cog_region::CogRegion;
+use crate::components::cog_region_member::CogRegionMember;
 use crate::components::cog_sprite::CogSprite;
 use crate::components::combat_bundle::CombatBundle;
 use crate::components::combat_health::CombatHealth;
@@ -226,6 +228,9 @@ pub fn process_map_cog_region(
     region_position.y - map_object.height as f32 * scale_y,
   );
 
+  // Create the region entity
+  let cog_region_entity = commands.spawn_empty().id();
+
   // Randomness
   let mut rng = rand::rng();
 
@@ -246,19 +251,29 @@ pub fn process_map_cog_region(
 
     let facing_code = if x <= region_rect.center().x { FacingCode::Right } else { FacingCode::Left };
 
-    if let Some(bundles) = build_cog_bundles_from_dept_tier(
+    if let Some((cog_bundle, combat_bundle)) = build_cog_bundles_from_dept_tier(
       cog_department_code,
       facing_code,
       tier,
       position,
       &cog_sprite_store,
     ) {
-      commands.spawn(bundles);
+      commands.spawn((
+        cog_bundle,
+        combat_bundle,
+        CogRegionMember(cog_region_entity),
+      ));
       info!("Spawned region cog: {:?}:{:?}", cog_department_code, tier);
     } else {
       warn!("CogRegion cog data missing: {:?}:{:?}", cog_department_code, tier);
     }
   }
+
+  // Apply the bounds to the region
+  let cog_region = CogRegion {
+    bounds: region_rect,
+  };
+  commands.entity(cog_region_entity).insert(cog_region);
 }
 
 pub fn process_map_object(

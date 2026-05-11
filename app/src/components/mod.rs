@@ -1,5 +1,7 @@
 pub mod cog_animation;
 pub mod cog_bundle;
+pub mod cog_region_member;
+pub mod cog_region;
 pub mod cog_sprite;
 pub mod cog;
 pub mod combat_bundle;

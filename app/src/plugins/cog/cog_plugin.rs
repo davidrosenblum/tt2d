@@ -10,6 +10,8 @@ use bevy::transform::components::Transform;
 
 use crate::components::cog::Cog;
 use crate::components::cog_animation::CogAnimation;
+use crate::components::cog_region::CogRegion;
+use crate::components::cog_region_member::CogRegionMember;
 use crate::components::cog_sprite::CogSprite;
 use crate::components::combat_health::CombatHealth;
 use crate::components::combat_target::CombatTarget;
@@ -113,20 +115,33 @@ fn update_cogs_acquire_target(
 fn update_cogs_follow_target(
   mut commands: Commands,
   cogs_query: Query<
-    (Entity, &mut Transform, &mut CogAnimation, &mut UnitFacing, &UnitMovement, &CombatTarget),
+    (Entity, &mut Transform, &mut CogAnimation, &CogRegionMember, &mut UnitFacing, &UnitMovement, &CombatTarget),
     (With<Cog>, With<CombatHealth>, Without<Toon>)
   >,
+  cog_regions_query: Query<&CogRegion>,
   toons_query: Query<&Transform, (With<Toon>, With<CombatHealth>, Without<Cog>)>,
   time: Res<Time>,
 ) {
   let delta_secs = time.delta_secs();
-  for (cog_entity, mut cog_transform, mut cog_animation, mut cog_facing, cog_movement, cog_target) in cogs_query {
+  for (
+    cog_entity,
+    mut cog_transform,
+    mut cog_animation,
+    cog_region_member,
+    mut cog_facing,
+    cog_movement,
+    cog_target,
+  ) in cogs_query {
     // Respect movement flag
     if !cog_movement.is_movement_enabled {
       continue;
     }
 
     let distance = cog_movement.speed * delta_secs * 100.;
+
+    let cog_start_x = cog_transform.translation.x;
+    let cog_start_y = cog_transform.translation.y;
+    let cog_start_z = cog_transform.translation.z;
     
     let cog_sight_rect = Rect::new(
       cog_transform.translation.x - HALF_COG_SIZE - SIGHT_RANGE,
@@ -212,8 +227,27 @@ fn update_cogs_follow_target(
         cog_transform.translation.z = get_z_from_y(cog_transform.translation.y);
       }
 
-      // TODO do not leave region
-      // - drop target
+      // Do not leave region
+      if let Ok(cog_region) = cog_regions_query.get(**cog_region_member) {
+        // If cog left region, go back and drop target
+        if !cog_region.bounds.contains(cog_transform.translation.truncate()) {
+          cog_transform.translation.x = cog_start_x;
+          cog_transform.translation.y = cog_start_y;
+          cog_transform.translation.z = cog_start_z;
+
+          if **cog_animation == AssetCogAnimationCode::Walk {
+            *cog_animation = CogAnimation(AssetCogAnimationCode::Idle);
+          }
+
+          commands.entity(cog_entity).remove::<CombatTarget>();
+          continue;
+        }
+
+        // If toon left region, drop target
+        if cog_region.bounds.intersect(toon_rect).is_empty() {
+          commands.entity(cog_entity).remove::<CombatTarget>();
+        }
+      }
 
       // Do not collide with other cogs in the region
     }
@@ -227,6 +261,7 @@ fn poll_map_load_requested(
   mut commands: Commands,
   mut message_reader: MessageReader<LoadMapRequested>,
   cogs_query: Query<Entity, With<Cog>>,
+  cog_regions_query: Query<Entity, With<CogRegion>>,
 ) {
   if message_reader.is_empty() {
     return;
@@ -235,6 +270,10 @@ fn poll_map_load_requested(
 
   for cog_entity in cogs_query {
     commands.entity(cog_entity).despawn();
+  }
+
+  for cog_region_entity in cog_regions_query {
+    commands.entity(cog_region_entity).despawn();
   }
 }
 
