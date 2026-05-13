@@ -3,6 +3,7 @@ use bevy::ecs::entity::Entity;
 use bevy::ecs::message::MessageReader;
 use bevy::ecs::query::{Changed, With, Without};
 use bevy::ecs::system::{Commands, If, Query, Res};
+use bevy::log::warn;
 use bevy::math::Rect;
 use bevy::sprite::Sprite;
 use bevy::time::Time;
@@ -10,16 +11,17 @@ use bevy::transform::components::Transform;
 
 use crate::components::cog::Cog;
 use crate::components::cog_animation::CogAnimation;
+use crate::components::cog_behavior::CogBehavior;
 use crate::components::cog_region::CogRegion;
 use crate::components::cog_region_member::CogRegionMember;
+use crate::components::cog_spawn_point::CogSpawnPoint;
 use crate::components::cog_sprite::CogSprite;
 use crate::components::combat_health::CombatHealth;
-use crate::components::combat_target::CombatTarget;
 use crate::components::sprite_animation_state::SpriteAnimationState;
 use crate::components::toon::Toon;
 use crate::components::unit_facing::UnitFacing;
 use crate::components::unit_movement::UnitMovement;
-use crate::constants::{COG_SIZE, TILE_SIZE, TOON_SIZE};
+use crate::constants::TILE_SIZE;
 use crate::messages::load_map_requested::LoadMapRequested;
 use crate::messages::loaded_map::LoadedMap;
 use crate::models::asset_cog_animation_code::AssetCogAnimationCode;
@@ -33,14 +35,14 @@ pub struct CogPlugin;
 impl Plugin for CogPlugin {
   fn build(&self, app: &mut bevy::app::App) {
     app.add_systems(Update, (update_cog_facing_direction, update_cog_animation_frame));
-    app.add_systems(Update, (update_cogs_acquire_target, update_cogs_follow_target));
+    // app.add_systems(Update, (update_cogs_acquire_target, update_cogs_follow_target));
+    app.add_systems(Update, update_cog_behavior);
     app.add_systems(Update, (poll_map_load_requested, poll_map_loaded));
   }
 }
 
 const SIGHT_RANGE: f32 = TILE_SIZE * 2.;
-const HALF_COG_SIZE: f32 = COG_SIZE / 2.;
-const HALF_TOON_SIZE: f32 = TOON_SIZE / 2.;
+const HALF_TILE_SIZE: f32 = TILE_SIZE / 2.;
 
 fn update_cog_animation_frame(
   cogs_query: Query<(&CogSprite, &CogAnimation, &mut SpriteAnimationState, &mut Sprite), With<Cog>>,
@@ -84,178 +86,199 @@ fn update_cog_facing_direction(
   }
 }
 
-fn update_cogs_acquire_target(
-  mut commands: Commands,
-  cogs_query: Query<(Entity, &Transform), (With<Cog>, With<CombatHealth>, Without<CombatTarget>, Without<Toon>)>,
-  toons_query: Query<(Entity, &Transform), (With<Toon>, With<CombatHealth>, Without<Cog>)>,
-) {
-  for (cog_entity, cog_transform) in cogs_query {
-    let cog_sight_rect = Rect::new(
-      cog_transform.translation.x - HALF_COG_SIZE - SIGHT_RANGE,
-      cog_transform.translation.y - SIGHT_RANGE,
-      cog_transform.translation.x + HALF_COG_SIZE + SIGHT_RANGE,
-      cog_transform.translation.y + COG_SIZE + SIGHT_RANGE,
-    );
-
-    for (toon_entity, toon_transform) in toons_query {
-      let toon_rect = Rect::new(
-        toon_transform.translation.x - HALF_TOON_SIZE,
-        toon_transform.translation.y,
-        toon_transform.translation.x + HALF_TOON_SIZE,
-        toon_transform.translation.y + TOON_SIZE,
-      );
-      if !cog_sight_rect.intersect(toon_rect).is_empty() {
-        commands.entity(cog_entity).insert(CombatTarget(toon_entity));
-        continue;
-      }
-    }
-  }
-}
-
-fn update_cogs_follow_target(
-  mut commands: Commands,
+fn update_cog_behavior(
+  // mut commands: Commands,
   cogs_query: Query<
-    (Entity, &mut Transform, &mut CogAnimation, &CogRegionMember, &mut UnitFacing, &UnitMovement, &CombatTarget),
+    (&mut Transform, &mut CogAnimation, &mut CogBehavior, Option<&CogRegionMember>, &CogSpawnPoint, &mut UnitFacing, &UnitMovement),
     (With<Cog>, With<CombatHealth>, Without<Toon>)
   >,
   cog_regions_query: Query<&CogRegion>,
-  toons_query: Query<&Transform, (With<Toon>, With<CombatHealth>, Without<Cog>)>,
+  toons_query: Query<(Entity, &Transform), (With<Toon>, With<CombatHealth>, Without<Cog>)>,
   time: Res<Time>,
 ) {
   let delta_secs = time.delta_secs();
   for (
-    cog_entity,
     mut cog_transform,
     mut cog_animation,
-    cog_region_member,
+    mut cog_behavior,
+    cog_region_member_opt,
+    cog_spawn_point,
     mut cog_facing,
     cog_movement,
-    cog_target,
-  ) in cogs_query {
-    // Respect movement flag
-    if !cog_movement.is_movement_enabled {
-      continue;
-    }
+  ) in cogs_query {    
+    match *cog_behavior {
+      CogBehavior::LookForTarget => {
+        let cog_sight_rect = Rect::new(
+          cog_transform.translation.x - HALF_TILE_SIZE - SIGHT_RANGE,
+          cog_transform.translation.y - SIGHT_RANGE,
+          cog_transform.translation.x + HALF_TILE_SIZE + SIGHT_RANGE,
+          cog_transform.translation.y + TILE_SIZE + SIGHT_RANGE,
+        );
 
-    let distance = cog_movement.speed * delta_secs * 100.;
-
-    let cog_start_x = cog_transform.translation.x;
-    let cog_start_y = cog_transform.translation.y;
-    let cog_start_z = cog_transform.translation.z;
-    
-    let cog_sight_rect = Rect::new(
-      cog_transform.translation.x - HALF_COG_SIZE - SIGHT_RANGE,
-      cog_transform.translation.y - SIGHT_RANGE,
-      cog_transform.translation.x + HALF_COG_SIZE + SIGHT_RANGE,
-      cog_transform.translation.y + COG_SIZE + SIGHT_RANGE,
-    );
-    let cog_rect = Rect::new(
-      cog_transform.translation.x - TILE_SIZE,
-      cog_transform.translation.y,
-      cog_transform.translation.x + TILE_SIZE,
-      cog_transform.translation.y + TILE_SIZE,
-    );
-
-    if let Ok(toon_transform) = toons_query.get(**cog_target) {
-      let toon_rect = Rect::new(
-        toon_transform.translation.x - HALF_TOON_SIZE,
-        toon_transform.translation.y,
-        toon_transform.translation.x + HALF_TOON_SIZE,
-        toon_transform.translation.y + TOON_SIZE,
-      );
-
-      // Can no longer see target
-      if cog_sight_rect.intersect(toon_rect).is_empty() {
-        // Stop walking
-        if **cog_animation == AssetCogAnimationCode::Walk {
-          *cog_animation = CogAnimation(AssetCogAnimationCode::Idle);
+        for (toon_entity, toon_transform) in toons_query {
+          let toon_tile_rect = Rect::new(
+            toon_transform.translation.x - HALF_TILE_SIZE,
+            toon_transform.translation.y,
+            toon_transform.translation.x + HALF_TILE_SIZE,
+            toon_transform.translation.y + TILE_SIZE,
+          );
+          if !toon_tile_rect.intersect(cog_sight_rect).is_empty() {
+            if let Some(cog_region_member) = cog_region_member_opt {
+              if let Ok(cog_region) = cog_regions_query.get(**cog_region_member) {
+                if !cog_region.bounds.intersect(toon_tile_rect).is_empty() {
+                  // Toon must be in bounds AND in sight (already checked)
+                  *cog_behavior = CogBehavior::Targeting(toon_entity);
+                }
+              }
+            } else {
+              // Do not need to check toon is in region because there is no linked cog region (standalone cog)
+              *cog_behavior = CogBehavior::Targeting(toon_entity);
+            }
+          }
         }
-        // Abandon target
-        commands.entity(cog_entity).remove::<CombatTarget>();
-        continue;
-      }
-
-      // Already at toon
-      if !cog_rect.intersect(toon_rect).is_empty() {
-        // Stop walking
-        if **cog_animation == AssetCogAnimationCode::Walk {
-          *cog_animation = CogAnimation(AssetCogAnimationCode::Idle);
+      },
+      CogBehavior::ReturnToSpawn => {
+        if !cog_movement.is_movement_enabled {
+          continue;
         }
-        continue;
-      }
+        let distance = cog_movement.speed * delta_secs * 100.;
 
-      // Move/face cog to toon x
-      let mut did_move_x = false;
-      if cog_rect.max.x < toon_rect.min.x {
-        // Left to right
-        cog_transform.translation.x += distance;
-        did_move_x = true;
-        
-        if **cog_facing != FacingCode::Right {
-          *cog_facing = UnitFacing(FacingCode::Right);
+        // Handle x-axis movement, trunc prevents jitter
+        let mut did_move_x = false;
+        if cog_transform.translation.x.trunc() > cog_spawn_point.x.trunc() {
+          // Right to left
+          cog_transform.translation.x -= distance;
+          did_move_x = true;
+
+          if **cog_facing != FacingCode::Left {
+            *cog_facing = UnitFacing(FacingCode::Left);
+          }
+        } else if cog_transform.translation.x.trunc() < cog_spawn_point.x.trunc() {
+          // Left to right
+          cog_transform.translation.x += distance;
+          did_move_x = true;
+
+          if **cog_facing != FacingCode::Right {
+            *cog_facing = UnitFacing(FacingCode::Right);
+          }
         }
-      } else if cog_rect.min.x > toon_rect.max.x {
-        // Right to left
-        cog_transform.translation.x -= distance;
-        did_move_x = true;
 
-        if **cog_facing != FacingCode::Left {
-          *cog_facing = UnitFacing(FacingCode::Left);
+        // Handle y-axis movement
+        let mut did_move_y = false;
+        if cog_transform.translation.y > cog_spawn_point.y {
+          cog_transform.translation.y -= distance;
+          did_move_y = true;
+        } else if cog_transform.translation.y < cog_spawn_point.y {
+          cog_transform.translation.y += distance;
+          did_move_y = true;
         }
-      }
 
-      // Move/face cog to toon y
-      let mut did_move_y = false;
-      if cog_rect.max.y < toon_rect.min.y {
-        cog_transform.translation.y += distance;
-        did_move_y = true;
-      } else if cog_rect.min.y > toon_rect.max.y {
-        cog_transform.translation.y -= distance;
-        did_move_y = true;
-      }
-
-      // Did move
-      if did_move_x || did_move_y {
-        // Update animation
-        if **cog_animation != AssetCogAnimationCode::Walk {
-          *cog_animation = CogAnimation(AssetCogAnimationCode::Walk);
+        // Update z (depth sort)
+        if did_move_y {
+          cog_transform.translation.z = get_z_from_y(cog_transform.translation.y);
         }
-      }
 
-      // Update z
-      if did_move_y {
-        cog_transform.translation.z = get_z_from_y(cog_transform.translation.y);
-      }
+        // Update animation if moving
+        if did_move_x || did_move_y {
+          if **cog_animation != AssetCogAnimationCode::Walk {
+            *cog_animation = CogAnimation(AssetCogAnimationCode::Walk);
+          }
+        }
 
-      // Do not leave region
-      if let Ok(cog_region) = cog_regions_query.get(**cog_region_member) {
-        // If cog left region, go back and drop target
-        if !cog_region.bounds.contains(cog_transform.translation.truncate()) {
-          cog_transform.translation.x = cog_start_x;
-          cog_transform.translation.y = cog_start_y;
-          cog_transform.translation.z = cog_start_z;
+        // Reached initial spawn point
+        if cog_transform.translation.x.trunc() == cog_spawn_point.x.trunc() {
+          if cog_transform.translation.y.trunc() == cog_spawn_point.y.trunc() {
+            *cog_behavior = CogBehavior::LookForTarget;
+          }
+        }
+      },
+      CogBehavior::Targeting(target_entity) => {
+        let Ok((_, toon_transform)) = toons_query.get(target_entity) else {
+          // Referenced toon entity does not exist
+          warn!("Toon target missing");
+          *cog_behavior = CogBehavior::ReturnToSpawn;
+          continue;
+        };
 
+         let cog_tile_rect = Rect::new(
+          cog_transform.translation.x - HALF_TILE_SIZE,
+          cog_transform.translation.y,
+          cog_transform.translation.x + HALF_TILE_SIZE,
+          cog_transform.translation.y + TILE_SIZE,
+        );
+
+        // If the cog leaves the region, abandon the target and return to spawn
+        if let Some(cog_region_member) = cog_region_member_opt {
+          if let Ok(cog_region) = cog_regions_query.get(**cog_region_member) {
+            if cog_region.bounds.intersect(cog_tile_rect).is_empty() {
+              *cog_behavior = CogBehavior::ReturnToSpawn;
+              continue;
+            }
+          }
+        }
+
+        let toon_tile_rect = Rect::new(
+          toon_transform.translation.x - HALF_TILE_SIZE,
+          toon_transform.translation.y,
+          toon_transform.translation.x + HALF_TILE_SIZE,
+          toon_transform.translation.y + TILE_SIZE,
+        );
+
+        // If the toon is too far away, then follow them, otherwise attack them if they are close enough
+        if cog_tile_rect.intersect(toon_tile_rect).is_empty() {
+          // Toon is out of range, cog must walk to toon
+          if !cog_movement.is_movement_enabled {
+            continue;
+          }
+          let distance = cog_movement.speed * delta_secs * 100.;
+
+          let mut did_move_x = false;
+          if cog_tile_rect.min.x > toon_tile_rect.max.x {
+            // Right to left
+            cog_transform.translation.x -= distance;
+            did_move_x = true;
+
+            if **cog_facing != FacingCode::Left {
+              *cog_facing = UnitFacing(FacingCode::Left);
+            }
+          } else if cog_tile_rect.max.x < toon_tile_rect.min.x {
+            // Left to right
+            cog_transform.translation.x += distance;
+            did_move_x = true;
+
+            if **cog_facing != FacingCode::Right {
+              *cog_facing = UnitFacing(FacingCode::Right);
+            }
+          }
+
+          let mut did_move_y = false;
+          if cog_tile_rect.min.y > toon_tile_rect.max.y {
+            cog_transform.translation.y -= distance;
+            did_move_y = true;
+          } else if cog_tile_rect.max.y < toon_tile_rect.min.y  {
+            cog_transform.translation.y += distance;
+            did_move_y = true;
+          }
+
+          if did_move_y {
+            cog_transform.translation.z = get_z_from_y(cog_transform.translation.y);
+          }
+
+          if did_move_x || did_move_y {
+            if **cog_animation != AssetCogAnimationCode::Walk {
+              *cog_animation = CogAnimation(AssetCogAnimationCode::Walk);
+            }
+          }
+        } else {
+          // Toon is in range, cog is safe to attack
           if **cog_animation == AssetCogAnimationCode::Walk {
             *cog_animation = CogAnimation(AssetCogAnimationCode::Idle);
           }
-
-          commands.entity(cog_entity).remove::<CombatTarget>();
-          continue;
         }
-
-        // If toon left region, drop target
-        if cog_region.bounds.intersect(toon_rect).is_empty() {
-          commands.entity(cog_entity).remove::<CombatTarget>();
-        }
-      }
-
-      // Do not collide with other cogs in the region
+      },
     }
   }
 }
-
-// TODO move cogs to player if in range
-// TODO cogs face place if in range
 
 fn poll_map_load_requested(
   mut commands: Commands,
