@@ -10,9 +10,11 @@ use uuid::Uuid;
 use crate::assets::tiled_map_json::{TiledMapJsonObject, TiledMapJsonObjectPropertyName, TiledMapJsonObjectType};
 use crate::components::cog::Cog;
 use crate::components::cog_animation::CogAnimation;
+use crate::components::cog_behavior::CogBehavior;
 use crate::components::cog_bundle::CogBundle;
 use crate::components::cog_region::CogRegion;
 use crate::components::cog_region_member::CogRegionMember;
+use crate::components::cog_spawn_point::CogSpawnPoint;
 use crate::components::cog_sprite::CogSprite;
 use crate::components::combat_bundle::CombatBundle;
 use crate::components::combat_health::CombatHealth;
@@ -58,6 +60,8 @@ pub fn build_cog_bundle(
       department_code: cog_data.department_code,
     },
     cog_animation: CogAnimation(animation_code),
+    cog_behavior: CogBehavior::LookForTarget,
+    cog_spawn_point: CogSpawnPoint(position),
     cog_sprite: CogSprite(cog_data.sprite_code),
     sprite,
     sprite_animation_state: SpriteAnimationState::new(frame.duration),

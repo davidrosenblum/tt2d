@@ -1,6 +1,6 @@
 use bevy::ecs::component::Component;
-use bevy::ecs::entity::Entity;
+use bevy::math::Vec2;
 use bevy::prelude::{Deref, DerefMut};
 
 #[derive(Component, Deref, DerefMut)]
-pub struct CombatTarget(pub Entity);
+pub struct CogSpawnPoint(pub Vec2);

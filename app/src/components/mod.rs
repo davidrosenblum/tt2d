@@ -1,13 +1,14 @@
 pub mod cog_animation;
+pub mod cog_behavior;
 pub mod cog_bundle;
 pub mod cog_region_member;
 pub mod cog_region;
+pub mod cog_spawn_point;
 pub mod cog_sprite;
 pub mod cog;
 pub mod combat_bundle;
 pub mod combat_health;
 pub mod combat_melee_attack;
-pub mod combat_target;
 pub mod player_controlled;
 pub mod projectile;
 pub mod sprite_animation_state;

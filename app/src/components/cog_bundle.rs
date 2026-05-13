@@ -4,6 +4,8 @@ use bevy::transform::components::Transform;
 
 use crate::components::cog::Cog;
 use crate::components::cog_animation::CogAnimation;
+use crate::components::cog_behavior::CogBehavior;
+use crate::components::cog_spawn_point::CogSpawnPoint;
 use crate::components::cog_sprite::CogSprite;
 use crate::components::sprite_animation_state::SpriteAnimationState;
 use crate::components::unit::Unit;
@@ -15,6 +17,8 @@ pub struct CogBundle {
   pub anchor: Anchor,
   pub cog: Cog,
   pub cog_animation: CogAnimation,
+  pub cog_behavior: CogBehavior,
+  pub cog_spawn_point: CogSpawnPoint,
   pub cog_sprite: CogSprite,
   pub sprite: Sprite,
   pub sprite_animation_state: SpriteAnimationState,
