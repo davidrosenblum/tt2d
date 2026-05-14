@@ -11,12 +11,13 @@ use crate::errors::asset_parse_filename_error::AssetParseFilenameError;
 use crate::models::sprite_animation_frame_data::SpriteAnimationFrameData;
 use crate::models::sprite_map::SpriteMap;
 
-pub fn parse_filename<S: FromStr, A: FromStr>(filename: &str) -> Result<(S, A), AssetParseFilenameError> {
-  // Expected format is "{layer}:{tag}"
+pub fn parse_filename<S: FromStr, A: FromStr>(filename: &str) -> Result<(S, A, usize), AssetParseFilenameError> {
+  // Expected format is "{layer}:{tag}:{tagframe}"
+  // Tagframe is required to not have colliding names when an animation has multiple frames
 
   // Must have both nested variables
   let sections = filename.split(":").collect::<Vec<_>>();
-  if sections.len() != 2 {
+  if sections.len() != 3 {
     return Err(AssetParseFilenameError::Malformed);
   }
 
@@ -30,12 +31,16 @@ pub fn parse_filename<S: FromStr, A: FromStr>(filename: &str) -> Result<(S, A), 
   let animation_code = tag.parse::<A>()
     .map_err(|_| AssetParseFilenameError::InvalidAnimationCode)?;
 
+  let tagframe = sections[2];
+  let index = tagframe.parse::<usize>()
+    .map_err(|_| AssetParseFilenameError::InvalidIndex)?;
+
   // Success
-  Ok((sprite_code, animation_code))
+  Ok((sprite_code, animation_code, index))
 }
 
 
-pub fn build_sprite_map<S: FromStr + Eq +Hash, A: FromStr + Eq + Hash>(
+pub fn build_sprite_map<S: FromStr + Eq + Hash, A: FromStr + Eq + Hash>(
   aseprite_json: &AsepriteJson,
 ) -> SpriteMap<S, A> {
   // Empty map of sprite => animations[] => frames[]
@@ -43,7 +48,7 @@ pub fn build_sprite_map<S: FromStr + Eq +Hash, A: FromStr + Eq + Hash>(
 
   for (index, (filename, frame)) in aseprite_json.frames.iter().enumerate() {
     // Parse the filename, skip if invalid
-    let Ok((sprite_code, animation_code)) = parse_filename::<S, A>(filename) else {
+    let Ok((sprite_code, animation_code, _)) = parse_filename::<S, A>(filename) else {
       warn!("Failed to parse filename: {}", filename);
       continue;
     };
