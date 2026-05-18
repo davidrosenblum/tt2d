@@ -171,6 +171,10 @@ fn update_toon_companion_movement(
       if **toon_animation != AssetToonAnimationCode::Walk {
         *toon_animation = ToonAnimation(AssetToonAnimationCode::Walk);
       }
+    } else {
+      if **toon_animation == AssetToonAnimationCode::Walk {
+        *toon_animation = ToonAnimation(AssetToonAnimationCode::Idle);
+      }
     }
   }
 }
