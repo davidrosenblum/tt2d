@@ -9,6 +9,7 @@ use crate::components::toon_sprite::ToonSprite;
 use crate::components::unit::Unit;
 use crate::components::unit_facing::UnitFacing;
 use crate::components::unit_movement::UnitMovement;
+use crate::components::unit_slots::UnitSlots;
 
 #[derive(Bundle)]
 pub struct ToonBundle {
@@ -22,4 +23,5 @@ pub struct ToonBundle {
   pub unit: Unit,
   pub unit_facing: UnitFacing,
   pub unit_movement: UnitMovement,
+  pub unit_slots: UnitSlots,
 }
