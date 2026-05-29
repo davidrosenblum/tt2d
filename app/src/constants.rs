@@ -7,6 +7,9 @@ pub const TILE_SIZE: f32 = 64.;   // Source is 32x32
 pub const COG_SIZE: f32 = 128.;   // Source is 64x64
 pub const TOON_SIZE: f32 = 96.;   // Source is 48x48
 
+// Common constants math
+pub const HALF_TILE_SIZE: f32 = TILE_SIZE / 2.;
+
 // Z-Index values for map layer position
 pub const TERRAIN_Z_INDEX: f32 = 10.;
 pub const STRUCTURE_BASE_Z_INDEX: f32 = 20.;
